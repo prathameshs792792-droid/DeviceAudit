@@ -1,0 +1,482 @@
+name: Generate and Build DeviceAudit APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Generate All Project Source Files
+        run: |
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/java/com/example/deviceaudit
+
+          # 1. settings.gradle
+          cat << 'EOF' > settings.gradle
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "DeviceAudit"
+          include ':app'
+          EOF
+
+          # 2. root build.gradle
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.2.2' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
+          }
+          EOF
+
+          # 3. app/build.gradle
+          cat << 'EOF' > app/build.gradle
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.example.deviceaudit'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.example.deviceaudit"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = '17'
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'com.google.android.material:material:1.11.0'
+              implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+              implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+              implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+          }
+          EOF
+
+          # 4. AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:tools="http://schemas.android.com/tools">
+              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="Device Audit"
+                  android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 5. strings.xml
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">Device Audit</string>
+          </resources>
+          EOF
+
+          # 6. activity_main.xml
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:background="#121212"
+              android:padding="16dp">
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="vertical">
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Device Security Audit"
+                      android:textColor="#FFFFFF"
+                      android:textSize="22sp"
+                      android:textStyle="bold" />
+                  <com.google.android.material.card.MaterialCardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="16dp"
+                      app:cardBackgroundColor="#1E1E1E"
+                      app:cardCornerRadius="12dp">
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:gravity="center"
+                          android:orientation="vertical"
+                          android:padding="20dp">
+                          <TextView
+                              android:id="@+id/tvScore"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="--"
+                              android:textColor="#00E676"
+                              android:textSize="48sp"
+                              android:textStyle="bold" />
+                          <TextView
+                              android:id="@+id/tvScoreLabel"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Ready to Scan"
+                              android:textColor="#FFFFFF"
+                              android:textSize="14sp" />
+                      </LinearLayout>
+                  </com.google.android.material.card.MaterialCardView>
+                  <com.google.android.material.progressindicator.LinearProgressIndicator
+                      android:id="@+id/scanProgressBar"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="16dp"
+                      android:indeterminate="true"
+                      android:visibility="gone"
+                      app:indicatorColor="#00E676" />
+                  <Button
+                      android:id="@+id/btnRunScan"
+                      android:layout_width="match_parent"
+                      android:layout_height="56dp"
+                      android:layout_marginTop="16dp"
+                      android:backgroundTint="#00E676"
+                      android:text="Start Deep Scan"
+                      android:textColor="#000000"
+                      android:textStyle="bold" />
+                  <TextView
+                      android:id="@+id/tvResults"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="20dp"
+                      android:background="#1A1A1A"
+                      android:lineSpacingExtra="4dp"
+                      android:padding="16dp"
+                      android:text="Tap 'Start Deep Scan' to inspect system status."
+                      android:textColor="#E0E0E0"
+                      android:textSize="12sp"
+                      android:typeface="monospace" />
+              </LinearLayout>
+          </ScrollView>
+          EOF
+
+          # 7. ScanModels.kt
+          cat << 'EOF' > app/src/main/java/com/example/deviceaudit/ScanModels.kt
+          package com.example.deviceaudit
+          data class SecurityReport(
+              val isRooted: Boolean,
+              val rootIndicators: List<String>,
+              val isAdbEnabled: Boolean,
+              val isVpnActive: Boolean
+          )
+          data class SuspiciousApp(
+              val packageName: String,
+              val appName: String,
+              val reasons: List<String>
+          )
+          data class HardwareReport(
+              val batteryHealth: String,
+              val batteryTempCelsius: Float,
+              val freeStoragePercent: Int,
+              val freeRamMb: Long
+          )
+          data class AuditResult(
+              val trustScore: Int,
+              val security: SecurityReport,
+              val suspiciousApps: List<SuspiciousApp>,
+              val hardware: HardwareReport
+          )
+          EOF
+
+          # 8. SecurityInspector.kt
+          cat << 'EOF' > app/src/main/java/com/example/deviceaudit/SecurityInspector.kt
+          package com.example.deviceaudit
+          import android.content.Context
+          import android.net.ConnectivityManager
+          import android.net.NetworkCapabilities
+          import android.os.Build
+          import android.provider.Settings
+          import java.io.File
+          class SecurityInspector(private val context: Context) {
+              fun auditSecurity(): SecurityReport {
+                  val rootIndicators = mutableListOf<String>()
+                  if (Build.TAGS != null && Build.TAGS.contains("test-keys")) {
+                      rootIndicators.add("Firmware signed with custom test-keys")
+                  }
+                  val knownSuPaths = listOf(
+                      "/system/bin/su", "/system/xbin/su", "/sbin/su",
+                      "/system/sd/xbin/su", "/system/bin/failsafe/su",
+                      "/data/local/su", "/data/local/bin/su", "/data/local/xbin/su"
+                  )
+                  for (path in knownSuPaths) {
+                      if (File(path).exists()) {
+                          rootIndicators.add("Superuser binary found: $path")
+                      }
+                  }
+                  val adbEnabled = Settings.Global.getInt(
+                      context.contentResolver,
+                      Settings.Global.ADB_ENABLED, 0
+                  ) == 1
+                  val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                  val activeNetwork = connectivityManager.activeNetwork
+                  val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+                  val vpnActive = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+                  return SecurityReport(
+                      isRooted = rootIndicators.isNotEmpty(),
+                      rootIndicators = rootIndicators,
+                      isAdbEnabled = adbEnabled,
+                      isVpnActive = vpnActive
+                  )
+              }
+          }
+          EOF
+
+          # 9. AppAuditor.kt
+          cat << 'EOF' > app/src/main/java/com/example/deviceaudit/AppAuditor.kt
+          package com.example.deviceaudit
+          import android.content.Context
+          import android.content.pm.ApplicationInfo
+          import android.content.pm.PackageManager
+          import android.os.Build
+          class AppAuditor(private val context: Context) {
+              fun auditInstalledApps(): List<SuspiciousApp> {
+                  val pm = context.packageManager
+                  val suspicious = mutableListOf<SuspiciousApp>()
+                  val packages = pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+                  for (pkg in packages) {
+                      if ((pkg.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0) continue
+                      val perms = pkg.requestedPermissions?.toList() ?: emptyList()
+                      val reasons = mutableListOf<String>()
+                      val hasOverlay = perms.contains("android.permission.SYSTEM_ALERT_WINDOW")
+                      val hasAccessibility = perms.contains("android.permission.BIND_ACCESSIBILITY_SERVICE")
+                      val hasSmsRead = perms.contains("android.permission.READ_SMS")
+                      val hasSmsReceive = perms.contains("android.permission.RECEIVE_SMS")
+                      if (hasOverlay && hasAccessibility) {
+                          reasons.add("Overlay + Accessibility combination detected (High Risk)")
+                      }
+                      val isSideloaded = isPackageSideloaded(pm, pkg.packageName)
+                      if (isSideloaded && (hasSmsRead || hasSmsReceive)) {
+                          reasons.add("Sideloaded APK with SMS interception permissions")
+                      }
+                      if (reasons.isNotEmpty()) {
+                          val appLabel = pm.getApplicationLabel(pkg.applicationInfo).toString()
+                          suspicious.add(SuspiciousApp(pkg.packageName, appLabel, reasons))
+                      }
+                  }
+                  return suspicious
+              }
+              private fun isPackageSideloaded(pm: PackageManager, packageName: String): Boolean {
+                  return try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                          val info = pm.getInstallSourceInfo(packageName)
+                          val installer = info.installingPackageName
+                          installer == null || installer != "com.android.vending"
+                      } else {
+                          @Suppress("DEPRECATION")
+                          val installer = pm.getInstallerPackageName(packageName)
+                          installer == null || installer != "com.android.vending"
+                      }
+                  } catch (e: Exception) { false }
+              }
+          }
+          EOF
+
+          # 10. HardwareInspector.kt
+          cat << 'EOF' > app/src/main/java/com/example/deviceaudit/HardwareInspector.kt
+          package com.example.deviceaudit
+          import android.app.ActivityManager
+          import android.content.Context
+          import android.content.Intent
+          import android.content.IntentFilter
+          import android.os.BatteryManager
+          import android.os.Environment
+          import android.os.StatFs
+          class HardwareInspector(private val context: Context) {
+              fun auditHardware(): HardwareReport {
+                  val bIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                  val healthCode = bIntent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
+                  val rawTemp = bIntent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
+                  val tempCelsius = rawTemp / 10f
+                  val batteryHealthStr = when (healthCode) {
+                      BatteryManager.BATTERY_HEALTH_GOOD -> "Healthy"
+                      BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheating"
+                      BatteryManager.BATTERY_HEALTH_DEAD -> "Dead / Damaged"
+                      else -> "Normal"
+                  }
+                  val stats = StatFs(Environment.getDataDirectory().path)
+                  val freeBytes = stats.availableBytes
+                  val totalBytes = stats.totalBytes
+                  val freeStoragePct = if (totalBytes > 0) ((freeBytes.toDouble() / totalBytes) * 100).toInt() else 0
+                  val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                  val memInfo = ActivityManager.MemoryInfo()
+                  actManager.getMemoryInfo(memInfo)
+                  val freeRamMb = memInfo.availMem / (1024 * 1024)
+                  return HardwareReport(
+                      batteryHealth = batteryHealthStr,
+                      batteryTempCelsius = tempCelsius,
+                      freeStoragePercent = freeStoragePct,
+                      freeRamMb = freeRamMb
+                  )
+              }
+          }
+          EOF
+
+          # 11. MainActivity.kt
+          cat << 'EOF' > app/src/main/java/com/example/deviceaudit/MainActivity.kt
+          package com.example.deviceaudit
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.view.View
+          import android.widget.Button
+          import android.widget.TextView
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.lifecycle.lifecycleScope
+          import com.google.android.material.progressindicator.LinearProgressIndicator
+          import kotlinx.coroutines.Dispatchers
+          import kotlinx.coroutines.launch
+          import kotlinx.coroutines.withContext
+          class MainActivity : AppCompatActivity() {
+              private lateinit var tvScore: TextView
+              private lateinit var tvScoreLabel: TextView
+              private lateinit var tvResults: TextView
+              private lateinit var btnRunScan: Button
+              private lateinit var progressBar: LinearProgressIndicator
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+                  tvScore = findViewById(R.id.tvScore)
+                  tvScoreLabel = findViewById(R.id.tvScoreLabel)
+                  tvResults = findViewById(R.id.tvResults)
+                  btnRunScan = findViewById(R.id.btnRunScan)
+                  progressBar = findViewById(R.id.scanProgressBar)
+                  btnRunScan.setOnClickListener { runFullAudit() }
+              }
+
+              private fun runFullAudit() {
+                  btnRunScan.isEnabled = false
+                  progressBar.visibility = View.VISIBLE
+                  tvResults.text = "Audit in progress..."
+                  lifecycleScope.launch(Dispatchers.Default) {
+                      val secReport = SecurityInspector(this@MainActivity).auditSecurity()
+                      val appsReport = AppAuditor(this@MainActivity).auditInstalledApps()
+                      val hwReport = HardwareInspector(this@MainActivity).auditHardware()
+                      val finalScore = calculateTrustScore(secReport, appsReport, hwReport)
+                      val auditResult = AuditResult(finalScore, secReport, appsReport, hwReport)
+                      withContext(Dispatchers.Main) {
+                          renderAuditReport(auditResult)
+                          progressBar.visibility = View.GONE
+                          btnRunScan.isEnabled = true
+                      }
+                  }
+              }
+
+              private fun calculateTrustScore(sec: SecurityReport, apps: List<SuspiciousApp>, hw: HardwareReport): Int {
+                  var score = 100
+                  if (sec.isRooted) score -= 35
+                  if (sec.isAdbEnabled) score -= 10
+                  score -= (apps.size * 15).coerceAtMost(30)
+                  if (hw.batteryHealth != "Healthy" && hw.batteryHealth != "Normal") score -= 10
+                  if (hw.freeStoragePercent < 10) score -= 10
+                  return score.coerceIn(0, 100)
+              }
+
+              private fun renderAuditReport(result: AuditResult) {
+                  tvScore.text = result.trustScore.toString()
+                  when {
+                      result.trustScore >= 80 -> {
+                          tvScore.setTextColor(Color.parseColor("#00E676"))
+                          tvScoreLabel.text = "Device Status: Secure"
+                      }
+                      result.trustScore >= 50 -> {
+                          tvScore.setTextColor(Color.parseColor("#FFD600"))
+                          tvScoreLabel.text = "Device Status: Warnings Detected"
+                      }
+                      else -> {
+                          tvScore.setTextColor(Color.parseColor("#FF1744"))
+                          tvScoreLabel.text = "Device Status: High Risk"
+                      }
+                  }
+                  val sb = StringBuilder()
+                  sb.append("=== SYSTEM INTEGRITY ===\n")
+                  sb.append("Root Status: ").append(if (result.security.isRooted) "COMPROMISED" else "Clean").append("\n")
+                  sb.append("USB Debugging (ADB): ").append(if (result.security.isAdbEnabled) "Active (Risk)" else "Disabled").append("\n")
+                  sb.append("VPN Tunnel: ").append(if (result.security.isVpnActive) "Active" else "None").append("\n\n")
+
+                  sb.append("=== APP ANALYSIS ===\n")
+                  sb.append("Flagged Apps: ").append(result.suspiciousApps.size).append("\n")
+                  result.suspiciousApps.forEach { app ->
+                      sb.append("• ").append(app.appName).append(" (").append(app.packageName).append(")\n")
+                      app.reasons.forEach { r -> sb.append("   - ").append(r).append("\n") }
+                  }
+                  sb.append("\n")
+
+                  sb.append("=== HARDWARE STATS ===\n")
+                  sb.append("Battery: ").append(result.hardware.batteryHealth).append("\n")
+                  sb.append("Temp: ").append(result.hardware.batteryTempCelsius).append(" °C\n")
+                  sb.append("Storage Available: ").append(result.hardware.freeStoragePercent).append("%\n")
+                  sb.append("Free RAM: ").append(result.hardware.freeRamMb).append(" MB\n")
+                  tvResults.text = sb.toString()
+              }
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceAudit-App
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
