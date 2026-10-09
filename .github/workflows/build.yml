@@ -24,13 +24,10 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Generate All Project Source Files
+      - name: Create Project Files
         run: |
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/layout
-          mkdir -p app/src/main/java/com/example/deviceaudit
+          mkdir -p app/src/main/res/values app/src/main/res/layout app/src/main/java/com/example/deviceaudit
 
-          # 1. settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -50,7 +47,6 @@ jobs:
           include ':app'
           EOF
 
-          # 2. root build.gradle
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.2.2' apply false
@@ -58,7 +54,6 @@ jobs:
           }
           EOF
 
-          # 3. app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -97,7 +92,6 @@ jobs:
           }
           EOF
 
-          # 4. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -121,14 +115,12 @@ jobs:
           </manifest>
           EOF
 
-          # 5. strings.xml
           cat << 'EOF' > app/src/main/res/values/strings.xml
           <resources>
               <string name="app_name">Device Audit</string>
           </resources>
           EOF
 
-          # 6. activity_main.xml
           cat << 'EOF' > app/src/main/res/layout/activity_main.xml
           <?xml version="1.0" encoding="utf-8"?>
           <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -210,7 +202,6 @@ jobs:
           </ScrollView>
           EOF
 
-          # 7. ScanModels.kt
           cat << 'EOF' > app/src/main/java/com/example/deviceaudit/ScanModels.kt
           package com.example.deviceaudit
           data class SecurityReport(
@@ -238,7 +229,6 @@ jobs:
           )
           EOF
 
-          # 8. SecurityInspector.kt
           cat << 'EOF' > app/src/main/java/com/example/deviceaudit/SecurityInspector.kt
           package com.example.deviceaudit
           import android.content.Context
@@ -281,7 +271,6 @@ jobs:
           }
           EOF
 
-          # 9. AppAuditor.kt
           cat << 'EOF' > app/src/main/java/com/example/deviceaudit/AppAuditor.kt
           package com.example.deviceaudit
           import android.content.Context
@@ -331,7 +320,6 @@ jobs:
           }
           EOF
 
-          # 10. HardwareInspector.kt
           cat << 'EOF' > app/src/main/java/com/example/deviceaudit/HardwareInspector.kt
           package com.example.deviceaudit
           import android.app.ActivityManager
@@ -371,7 +359,6 @@ jobs:
           }
           EOF
 
-          # 11. MainActivity.kt
           cat << 'EOF' > app/src/main/java/com/example/deviceaudit/MainActivity.kt
           package com.example.deviceaudit
           import android.graphics.Color
